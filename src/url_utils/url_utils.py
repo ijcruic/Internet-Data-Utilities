@@ -5,14 +5,13 @@ Created on Tue Oct 26 15:45:18 2021
 @author: icruicks
 """
 from abc import ABC, abstractmethod
-import requests, urllib3, pafy, re, os, logging, time, random
+import requests, urllib3, re, os, logging, time, random, string
 import concurrent.futures
 import pandas as pd
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import WebDriverException
 from bs4 import BeautifulSoup 
-from youtube_transcript_api import YouTubeTranscriptApi as yapi
 try:
     from unshortenit import UnshortenIt
     unshortener_available = True
@@ -208,8 +207,9 @@ def get_base_url(url, link_shorteners=LINK_SHORTENERS, num_tries=3):
         shortened = False
         return url, shortened
     
+    
 '''
-Define module-level functions that inheret from internet_data_collection
+Define module-level classes that inheret from internet_data_collection
 abstract class
 '''
     
@@ -232,6 +232,8 @@ class process_urls(internet_data_collection):
             
         datum['domain'] = get_domain(url)
         datum['base_url'] = url
+        response = requests.get(url)
+        datum['repsonse_code'] = response.status_code
         return datum
     
     def retreive_from_urls(self, list_of_urls):
@@ -279,8 +281,8 @@ class get_text_from_urls(internet_data_collection):
                     options = Options()
                     options.add_argument('--headless')
                     with webdriver.Chrome(self.path_to_chromedriver, options=options) as driver:
-                        driver.get(url)
                         driver.set_page_load_timeout(30)
+                        driver.get(url)
                         raise WebDriverException
                     html = driver.page_source
                 except:
@@ -322,8 +324,98 @@ class get_text_from_urls(internet_data_collection):
         return return_df
             
             
+class get_images_from_urls(internet_data_collection):
             
+    def __init__(self, num_retries=3, path_to_chromedriver=None, 
+                 image_save_directory="images"):
+        self.num_retries = num_retries
+        self.path_to_chromedriver = path_to_chromedriver
+        if path_to_chromedriver is not None:
+            self.use_selenium= True
+        else:
+            self.use_selenium = False
+
+        self.image_save_directory = image_save_directory
+        if image_save_directory == "images":        
+            if image_save_directory not in os.listdir():
+                try:
+                    os.mkdir(image_save_directory)
+                except OSError:
+                    pass
             
+    def retrieve_from_url(self, url):
+        datum= {'url':url,
+                'image_urls':[],
+                'image_names':[]}
+        html = None
+        logging.info("Getting image from: "+url)
+        for attempt in range(self.num_retries):
+            try:
+                html = requests.get(url, headers={"User-Agent": "Requests"},
+                                    allow_redirects=True, timeout=10).content
+            except requests.exceptions.SSLError:
+                try:
+                    html = requests.get(url, headers={"User-Agent": "Requests"},
+                                        allow_redirects=True, timeout=10, verfiy=False).content
+                    break
+                except:
+                    break
+            except requests.exceptions.RequestException:
+                time.sleep(random.uniform(30,120))
+            else:
+                break
             
+        if html == None:
+            logging.error("Unable to get images by requests for: "+url)
+            if self.use_selenium:
+                try:
+                    options = Options()
+                    options.add_argument('--headless')
+                    with webdriver.Chrome(self.path_to_chromedriver, options=options) as driver:
+                        driver.get(url)
+                        driver.set_page_load_timeout(30)
+                        raise WebDriverException
+                    html = driver.page_source
+                except:
+                    logging.error("Unable to get html from website: "+url)
+                    datum['image_name']= "None"
+                    return datum
+            else:
+                datum['image_name']= "None"
+                return datum
+    
+        try:
+            soup = BeautifulSoup(html, 'html.parser')
+            img_tags = soup.find_all('img')
+            urls = [img['src'] for img in img_tags]
+            datum['image_urls'] = urls
+            image_filenames = [''.join(random.SystemRandom().choice(string.ascii_letters + string.digits) for _ in range(6))+i[-4:] for i in urls]
+            datum['image_names'] = image_filenames
+            for i in range(len(urls)):
+                image_url = urls[i]
+                image_filename = image_filenames [i]
+                try:
+                    with open(os.path.join(self.image_save_directory, image_filename), 'wb') as f:
+                        if 'http' not in url:
+                            # sometimes an image source can be relative 
+                            # if it is provide the base url which also happens 
+                            # to be the site variable atm. 
+                            image_url = '{}/{}'.format(url, image_url)
+                        response = requests.get(image_url)
+                        f.write(response.content)
+                except:
+                    logging.error("Unable to access image: "+image_url)
+                
+        except:
+            logging.error("Unable parse images from html: "+url)
+    
+        return datum
             
+    
+    def retreive_from_urls(self, list_of_urls):
+        threads = min(MAX_THREADS, len(list_of_urls))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=threads) as executor:
+            processed_urls =executor.map(self.retrieve_from_url, list_of_urls)
+            
+        return pd.DataFrame(processed_urls)
             
