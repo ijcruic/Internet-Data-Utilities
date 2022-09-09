@@ -11,13 +11,26 @@ from threading import Thread
 from pymongo import MongoClient, DeleteOne
 
 '''
+Set up MongoDB to store collection and logging file
+'''
+client = MongoClient('foundation1.ece.local.cmu.edu', 27777)
+db = client['military_vaccine']
+collection = db['twitter']
+
+logging.basicConfig(filename="Military_Vaccine_Twitter_Streaming_Logs.txt", filemode='a',
+                    level=logging.INFO)
+logger=logging.getLogger() 
+
+
+
+'''
 Define any functions or classes, and logging
 '''
-class MyStreamListener(tweepy.StreamListener):
-    def __init__(self, api, collection, q=Queue()):
-        self.api = api
+class MyStreamListener(tweepy.Stream):
+    def __init__(self, consumer_key, consumer_secret, access_token, access_token_secret,
+                 collection, q=Queue()):
+        super(MyStreamListener, self).__init__(consumer_key, consumer_secret, access_token, access_token_secret)
         self.collection = collection
-        self.me = api.me()
         self.i=0
         self.q = q
         for i in range(10):
@@ -45,9 +58,12 @@ class MyStreamListener(tweepy.StreamListener):
         if self.i %10000 == 0:
             logging.info("{} Tweets processed".format(self.i))
 
-    def on_error(self, status):
+    def on_exception(self, status):
         logging.exception("Exception occured: {}".format(status))
         return False
+    
+    def on_disconnect(self):
+        logging.info("Disconnecting Listener, {} Tweets processed".format(self.i))
 
 
 def remove_duplicates(collection):
@@ -70,13 +86,8 @@ def remove_duplicates(collection):
     if requests:
         collection.bulk_write(requests)
     
-    logging.info("Total Number of Tweets Collected {}".format(collection.estimated_document_count()))
+    logging.info("Removing duplicates. Total Number of Tweets Collected {}".format(collection.estimated_document_count()))
 
-
-
-logging.basicConfig(filename="Afghanistan_Twitter_Streaming_Logs.txt", filemode='a',
-                    level=logging.INFO)
-logger=logging.getLogger() 
 
 '''
 Read in keys, set up files paths, and set up API
@@ -91,45 +102,32 @@ with open(os.path.join(key_dir, "afg_twitter_consumer_secret.txt"),'r') as f:
     consumer_secret= f.read()
     
 with open(os.path.join(key_dir, "afg_twitter_access_key.txt"),'r') as f:
-    access_token_key = f.read()
+    access_token = f.read()
     
 with open(os.path.join(key_dir, "afg_twitter_access_secret.txt"),'r') as f:
     access_token_secret= f.read()
 
-auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-auth.set_access_token(access_token_key, access_token_secret)
-api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
-
-'''
-Set up MongoDB to store collection
-'''
-client = MongoClient('127.0.0.1', 2777)
-db = client['afghanistan_withdrawal']
-collection = db['twitter']
 
 '''
 Specify any keywords or other search parameters
 '''
-kwargs = {
-"track" : ['afghanistan', 'taliban', 'kabul', 'bagram', "U.S. withdrawal", 
-           'afghan', '#afghanistan']
-}
+track = ['military vaccine', 'military vaccine mandate']
 
 '''
 Collect the Tweets and store them in the MongoDB
 '''
-i = 0
-for i in range(3):
+stream = MyStreamListener(consumer_key, consumer_secret, access_token, access_token_secret, collection)
+for retry in range(2):
     try:
-        tweets_listener = MyStreamListener(api, collection)
-        stream = tweepy.Stream(api.auth, tweets_listener)
-        stream.filter(track = ['afghanistan', 'taliban', 'kabul', 'bagram', "U.S. withdrawal", 
-                   'afghan', '#afghanistan'])
+        stream.filter(track = track)
     except:
         logging.exception("Exception occured:")
-
+        remove_duplicates(collection)
 
 remove_duplicates(collection)
+
+logging.info("/////////////////Final Collection Number////////////")
+logging.info("Total Number of Tweets Collected {}".format(collection.estimated_document_count()))
 
 
 

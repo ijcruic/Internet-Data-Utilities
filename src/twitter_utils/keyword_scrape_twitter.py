@@ -8,6 +8,12 @@ import tweepy, time, os, logging
 from datetime import datetime
 from pymongo import MongoClient, DeleteOne
 
+'''
+Set up MongoDB to store collection and log file
+'''
+client = MongoClient('127.0.0.1', 2777)
+db = client['afghanistan_withdrawal']
+collection = db['twitter']
 
 logging.basicConfig(filename="Afghanistan_Twitter_Scrape_Logs.txt", filemode='a',
                     level=logging.INFO)
@@ -76,14 +82,8 @@ with open(os.path.join(key_dir, "afg_twitter_access_secret.txt"),'r') as f:
 
 auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
 auth.set_access_token(access_token_key, access_token_secret)
-api = tweepy.API(auth, wait_on_rate_limit=True, wait_on_rate_limit_notify=True)
+api = tweepy.API(auth, wait_on_rate_limit=True)
 
-'''
-Set up MongoDB to store collection
-'''
-client = MongoClient('127.0.0.1', 2777)
-db = client['afghanistan_withdrawal']
-collection = db['twitter']
 
 '''
 Read in keywords and hashtags for the query terms, and any other arguments
@@ -101,9 +101,9 @@ Collect and store the Twitter data
 remove_duplicates(collection)
 
 i = 0
-for i in range(3):
+for i in range(20):
     try:
-        for tweet in tweepy.Cursor(api.search, **kwargs).items():
+        for tweet in tweepy.Cursor(api.search_tweets, **kwargs).items():
             dt_now =  datetime.now()
             tweet = tweet._json
             tweet['collection']= {
@@ -113,11 +113,15 @@ for i in range(3):
                 }
             collection.insert_one(tweet)
             i +=1
-            if i %10000 == 0:
+            if i %1000 == 0:
                 logging.info("{} Tweets processed".format(i))
     
     except:
         logging.exception("Exception occured:")
         time.sleep(15 * 60)
+        remove_duplicates(collection)
 
 remove_duplicates(collection)
+
+logging.info("/////////////////Final Collection Number////////////")
+logging.info("Total Number of Tweets Collected {}".format(collection.estimated_document_count()))

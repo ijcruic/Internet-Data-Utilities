@@ -8,8 +8,14 @@ from pymongo import MongoClient, DeleteOne
 
 logging.basicConfig(filename="Mil_Vaccine_Conversations_Logs.txt", filemode='a',
                     level=logging.INFO)
-logger=logging.getLogger() 
+logger=logging.getLogger()
 
+'''
+Set up the MongoDB
+'''
+client = MongoClient('localhost', 27777)
+db = client['military_vaccine']
+collection = db['twitter']
 
 
 '''
@@ -72,7 +78,7 @@ class ConversationScraper:
             uri = 'https://api.twitter.com/2/tweets/search/all?'
 
             params = {'query': f'conversation_id:{conversation_id}',
-                      "start_time": "2020-01-01T00:00:00.000Z",
+                      "start_time": "2020-02-01T00:00:00.000Z",
                       "max_results": 500,
                       'tweet.fields': 'id',
             }
@@ -157,14 +163,6 @@ auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
 auth.set_access_token(access_token_key, access_token_secret)
 api = tweepy.API(auth, wait_on_rate_limit=True)
     
-    
-'''
-Set up the MongoDB
-'''
-client = MongoClient('localhost', 27777)
-db = client['military_vaccine']
-collection = db['twitter']
-
 
 '''
 Get base data and add conversation_ids, if they exist, and then get the full tweets of 
@@ -172,16 +170,20 @@ any other tweets in the conversation
 '''
 i=0
 conversation_ids =[]
-for tweet in collection.find({}):
+collection.find({'conversation_id':{'$exists':False}}, no_cursor_timeout=True)
+for tweet in cursor:
     conversation_id = get_conversation_id(tweet['id'])
     if conversation_id != None:
         collection.update_one({'_id':tweet['_id']}, {"$set":{"conversation_id":conversation_id}}, upsert=False)
         conversation_ids.append(conversation_id)
-    i +=1
-    if i %1000 == 0:
-        logging.info("{} Tweets processed for conversation_ids".format(i))
+        i +=1
+        if i %1000 == 0:
+            logging.info("{} Tweets processed for conversation_ids".format(i))
+cursor.close()
 
 conversation_ids = list(set(conversation_ids)) #make sure to not duplicate any conversation_ids
+logging.info("Total number of conversation IDs pulled {}".format(i))
+
 convo_scraper = ConversationScraper(api, collection)
 convo_scraper.get_conversations(conversation_ids)
                 
