@@ -232,8 +232,6 @@ class process_urls(internet_data_collection):
             
         datum['domain'] = get_domain(url)
         datum['base_url'] = url
-        response = requests.get(url)
-        datum['repsonse_code'] = response.status_code
         return datum
     
     def retreive_from_urls(self, list_of_urls):
