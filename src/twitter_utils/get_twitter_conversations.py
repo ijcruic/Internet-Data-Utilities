@@ -47,11 +47,11 @@ def get_bearer_header():
     return bearer_header
 
 
-def get_conversation_id(id):
+def get_conversation_id(tweet):
     uri = 'https://api.twitter.com/2/tweets?'
 
     params = {
-       'ids':id,
+       'ids':tweet['id'],
        'tweet.fields':'conversation_id'
     }
     try:
@@ -170,8 +170,8 @@ any other tweets in the conversation
 '''
 i=0
 conversation_ids =[]
-collection.find({'conversation_id':{'$exists':False}}, no_cursor_timeout=True)
-for tweet in cursor:
+tweets = list(collection.find({'conversation_id':{'$exists':False}},{"id":1}))
+for tweet in tweets:
     conversation_id = get_conversation_id(tweet['id'])
     if conversation_id != None:
         collection.update_one({'_id':tweet['_id']}, {"$set":{"conversation_id":conversation_id}}, upsert=False)
@@ -179,7 +179,6 @@ for tweet in cursor:
         i +=1
         if i %1000 == 0:
             logging.info("{} Tweets processed for conversation_ids".format(i))
-cursor.close()
 
 conversation_ids = list(set(conversation_ids)) #make sure to not duplicate any conversation_ids
 logging.info("Total number of conversation IDs pulled {}".format(i))

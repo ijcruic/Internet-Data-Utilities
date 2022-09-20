@@ -14,13 +14,12 @@ from pymongo import MongoClient, DeleteOne
 Set up MongoDB to store collection and logging file
 '''
 client = MongoClient('foundation1.ece.local.cmu.edu', 27777)
-db = client['military_vaccine']
+db = client['oath_keepers']
 collection = db['twitter']
 
-logging.basicConfig(filename="Military_Vaccine_Twitter_Streaming_Logs.txt", filemode='a',
+logging.basicConfig(filename="Oath_Keepers_Keyword_Twitter_Scrape_Logs.txt", filemode='a',
                     level=logging.INFO)
 logger=logging.getLogger() 
-
 
 
 '''
