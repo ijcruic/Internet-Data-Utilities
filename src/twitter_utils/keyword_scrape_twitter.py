@@ -12,10 +12,10 @@ from pymongo import MongoClient, DeleteOne
 Set up MongoDB to store collection and log file
 '''
 client = MongoClient('127.0.0.1', 2777)
-db = client['afghanistan_withdrawal']
+db = client['mar_a_lago_raid']
 collection = db['twitter']
 
-logging.basicConfig(filename="Afghanistan_Twitter_Scrape_Logs.txt", filemode='a',
+logging.basicConfig(filename="Mar-a-lago_Twitter_Keyword_Logs.txt", filemode='a',
                     level=logging.INFO)
 logger=logging.getLogger() 
 
@@ -89,10 +89,8 @@ api = tweepy.API(auth, wait_on_rate_limit=True)
 Read in keywords and hashtags for the query terms, and any other arguments
 '''
 kwargs = {
-"q" : '''afghanistan OR taliban OR kabul OR bagram OR "U.S. withdrawal" 
-        OR afghan OR #afghanistan
-        ''',
-"start_date" : datetime(2021,9,13,0,0,0)
+"q" : ''' "mar-a-lago" OR "FBI Raid" OR "Garland" ''',
+"tweet_mode" : 'extended'
 }
 
 '''

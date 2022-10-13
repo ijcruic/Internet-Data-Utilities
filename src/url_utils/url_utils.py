@@ -39,6 +39,11 @@ LINK_SHORTENERS =set(['trib.al', 'bit.ly','www.bit.ly','tinyurl','ow.ly','buff.l
                            'w.wiki', 'w-j.com', 'wp.lnjmp.com', 'hann.it', 'feedproxy.google.com',
                            'tiny.iavian.com'])
 
+ FALSE_LINK_SHORTENERS = set( ["t.me"
+                              
+                              
+                              ])
+
 KEEP_QUERY_TERMS = ['www.youtube.com', 'youtube.com', 'm.youtube.com', 'youtu.be', 
                     'None','m.facebook.com', 'facebook.com','theresistance.video']
 
@@ -152,7 +157,7 @@ def remove_query_terms(url, keep_query_terms=KEEP_QUERY_TERMS):
     return new_url
     
     
-def get_base_url(url, link_shorteners=LINK_SHORTENERS, num_tries=3):
+def get_base_url(url, link_shorteners=LINK_SHORTENERS, false_link_shorteners = FALSE_LINK_SHORTENERS, num_tries=3):
     """
     check for whether a url is shortened, and then unshorten
     it if it is.
@@ -175,7 +180,7 @@ def get_base_url(url, link_shorteners=LINK_SHORTENERS, num_tries=3):
     """
     
     url_netloc = urlparse(url).netloc.lower()
-    if (url_netloc in link_shorteners) | (bool(re.match(r"\.\w\w", url_netloc[-3:]))):
+    if ((url_netloc in link_shorteners) | (bool(re.match(r"\.\w\w", url_netloc[-3:])))) & (url_netloc not in false_link_shorteners):
         shortened = True
         if unshortener_available:
             for i in range(num_tries):

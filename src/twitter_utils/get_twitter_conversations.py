@@ -6,7 +6,7 @@ import tweepy, time, os, logging, requests, base64, time, numpy as np
 from datetime import datetime
 from pymongo import MongoClient, DeleteOne
 
-logging.basicConfig(filename="Mil_Vaccine_Conversations_Logs.txt", filemode='a',
+logging.basicConfig(filename="Killnet_Conversations_Logs.txt", filemode='a',
                     level=logging.INFO)
 logger=logging.getLogger()
 
@@ -14,7 +14,7 @@ logger=logging.getLogger()
 Set up the MongoDB
 '''
 client = MongoClient('localhost', 27777)
-db = client['military_vaccine']
+db = client['killnet']
 collection = db['twitter']
 
 
@@ -98,7 +98,7 @@ class ConversationScraper:
                     for partial_tweet in resp.json()['data']:
                         tweet_id = partial_tweet['id']
                         dt_now =  datetime.now()
-                        tweet = api.lookup_statuses([tweet_id])[0]._json
+                        tweet = api.lookup_statuses([tweet_id], tweet_mode='extended')[0]._json
                         tweet['collection']= {
                             'collection_time' : str(dt_now),
                             'collected_by' : 'icruicks',
@@ -172,7 +172,7 @@ i=0
 conversation_ids =[]
 tweets = list(collection.find({'conversation_id':{'$exists':False}},{"id":1}))
 for tweet in tweets:
-    conversation_id = get_conversation_id(tweet['id'])
+    conversation_id = get_conversation_id(tweet)
     if conversation_id != None:
         collection.update_one({'_id':tweet['_id']}, {"$set":{"conversation_id":conversation_id}}, upsert=False)
         conversation_ids.append(conversation_id)
