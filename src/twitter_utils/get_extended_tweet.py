@@ -6,15 +6,15 @@ import tweepy, time, os, logging, requests, base64, time, numpy as np
 from datetime import datetime
 from pymongo import MongoClient, DeleteOne
 
-logging.basicConfig(filename="mil_vaccine_extend_Logs.txt", filemode='a',
+logging.basicConfig(filename="russia_ukraine_war_extend_Logs.txt", filemode='a',
                     level=logging.INFO)
 logger=logging.getLogger()
 
 '''
 Set up the MongoDB
 '''
-client = MongoClient('localhost', 27777)
-db = client['military_vaccine']
+client = MongoClient('foundation1.ece.local.cmu.edu', 27777)
+db = client['russia_ukraine_war']
 collection = db['twitter']
 
 
@@ -76,16 +76,26 @@ tweet_ids = [t['id'] for t in tweets]
 
 tweet_ids_chunks = [tweet_ids [x:x+100] for x in range(0, len(tweet_ids), 100)]
 i=0
-for chunk in tweet_ids_chunks:
-    for status in api.lookup_statuses(chunk, tweet_mode='extended'):
-        tweet = status._json
-        if 'extended_tweet' in tweet:
-            collection.update_one({'_id':tweet['id']}, {"$set":{"extended_tweet":tweet["extended_tweet"]}}, upsert=False)
-        elif "full_text" in tweet:
-            collection.update_one({'_id':tweet['id']}, {"$set":{"full_text":tweet["full_text"]}}, upsert=False)
-        i +=1
-        if i %1000 == 0:
-            logging.info("{} Tweets processed for conversation_ids".format(i))
+for retry in range(100):
+    try:
+        for chunk in tweet_ids_chunks:
+            for status in api.lookup_statuses(chunk, tweet_mode='extended'):
+                tweet = status._json
+                if 'extended_tweet' in tweet:
+                    collection.update_one({'_id':tweet['id']}, {"$set":{"extended_tweet":tweet["extended_tweet"]}}, upsert=False)
+                elif "full_text" in tweet:
+                    collection.update_one({'_id':tweet['id']}, {"$set":{"full_text":tweet["full_text"]}}, upsert=False)
+                i +=1
+                if i %1000 == 0:
+                    logging.info("{} Tweets processed for extended tweets".format(i))
+                    
+    except tweepy.errors.TooManyRequests:
+        logging.exception("Exception occured: ")
+        time.sleep(15* 60)
+    
+    except:
+        logging.exception("Exception occured: ")
+        time.sleep(5)
     
     
 remove_duplicates(collection)

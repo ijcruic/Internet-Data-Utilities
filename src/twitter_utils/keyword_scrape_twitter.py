@@ -99,7 +99,7 @@ Collect and store the Twitter data
 remove_duplicates(collection)
 
 i = 0
-for i in range(20):
+for retry in range(20):
     try:
         for tweet in tweepy.Cursor(api.search_tweets, **kwargs).items():
             dt_now =  datetime.now()

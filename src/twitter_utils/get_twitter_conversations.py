@@ -13,7 +13,7 @@ logger=logging.getLogger()
 '''
 Set up the MongoDB
 '''
-client = MongoClient('localhost', 27777)
+client = MongoClient('foundation1.ece.local.cmu.edu', 27777)
 db = client['killnet']
 collection = db['twitter']
 
@@ -95,17 +95,18 @@ class ConversationScraper:
                     
                 if resp.json()['meta']['result_count'] > 0:
                     logging.info("Conversation ID {} had {} tweets in it".format(conversation_id, resp.json()['meta']['result_count']))
-                    for partial_tweet in resp.json()['data']:
-                        tweet_id = partial_tweet['id']
-                        dt_now =  datetime.now()
-                        tweet = api.lookup_statuses([tweet_id], tweet_mode='extended')[0]._json
-                        tweet['collection']= {
-                            'collection_time' : str(dt_now),
-                            'collected_by' : 'icruicks',
-                            }
-                        tweet['conversation_id'] = conversation_id
-                        self.collection.insert_one(tweet)
-                        self.i +=1
+                    tweet_ids = [t['id'] for  t  in resp.json()['data']]
+                    tweet_ids_chunks = [tweet_ids [x:x+100] for x in range(0, len(tweet_ids), 100)]
+                    for chunk in tweet_ids_chunks:
+                        for status in api.lookup_statuses(chunk, tweet_mode='extended'):
+                            tweet = status._json
+                            tweet['collection']= {
+                                'collection_time' : str(datetime.now()),
+                                'collected_by' : 'icruicks',
+                                }
+                            tweet['conversation_id'] = conversation_id
+                            self.collection.insert_one(tweet)
+                            self.i +=1
                     
                     
                 else:
@@ -168,8 +169,14 @@ api = tweepy.API(auth, wait_on_rate_limit=True)
 Get base data and add conversation_ids, if they exist, and then get the full tweets of 
 any other tweets in the conversation
 '''
+
+# Add in any previously collected conversation ID's (optional step)
+conversation_ids = list(collection.find({'conversation_id':{'$exists':True}},{"conversation_id":1}))
+conversation_ids = [c['conversation_id'] for c in conversation_ids]
+
+# conversation_ids =[]
+
 i=0
-conversation_ids =[]
 tweets = list(collection.find({'conversation_id':{'$exists':False}},{"id":1}))
 for tweet in tweets:
     conversation_id = get_conversation_id(tweet)
@@ -180,13 +187,15 @@ for tweet in tweets:
         if i %1000 == 0:
             logging.info("{} Tweets processed for conversation_ids".format(i))
 
-conversation_ids = list(set(conversation_ids)) #make sure to not duplicate any conversation_ids
 logging.info("Total number of conversation IDs pulled {}".format(i))
 
+'''
+Get the tweets in the conversation
+'''
+conversation_ids = list(set(conversation_ids)) #make sure to not duplicate any conversation_ids
 convo_scraper = ConversationScraper(api, collection)
 convo_scraper.get_conversations(conversation_ids)
-                
-                
+                      
 remove_duplicates(collection)
 
 logging.info("/////////////////Final Collection Number////////////")
