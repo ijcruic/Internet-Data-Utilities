@@ -3,10 +3,11 @@
 @author: icruicks
 """
 import tweepy, time, os, logging, requests, base64, time, numpy as np
+import concurrent.futures
 from datetime import datetime
 from pymongo import MongoClient, DeleteOne
 
-logging.basicConfig(filename="Killnet_Conversations_Logs.txt", filemode='a',
+logging.basicConfig(filename="killnet_Conversations_Logs.txt", filemode='a',
                     level=logging.INFO)
 logger=logging.getLogger()
 
@@ -54,13 +55,17 @@ def get_conversation_id(tweet):
        'ids':tweet['id'],
        'tweet.fields':'conversation_id'
     }
-    try:
-        bearer_header = get_bearer_header()
-        resp = requests.get(uri, headers=bearer_header, params=params)
-        conversation_id = resp.json()['data'][0]['conversation_id']
-        return conversation_id
-    except:
-        return None
+    for retry in range(100):
+        try:
+            bearer_header = get_bearer_header()
+            resp = requests.get(uri, headers=bearer_header, params=params)
+            conversation_id = resp.json()['data'][0]['conversation_id']
+            return (tweet['_id'], conversation_id)
+        except tweepy.errors.TooManyRequests:
+            logging.exception("Exception occured: ")
+            time.sleep(15* 60)
+        except:
+            return None
     
     
 class ConversationScraper:
@@ -176,18 +181,17 @@ conversation_ids = [c['conversation_id'] for c in conversation_ids]
 
 # conversation_ids =[]
 
-i=0
 tweets = list(collection.find({'conversation_id':{'$exists':False}},{"id":1}))
-for tweet in tweets:
-    conversation_id = get_conversation_id(tweet)
-    if conversation_id != None:
-        collection.update_one({'_id':tweet['_id']}, {"$set":{"conversation_id":conversation_id}}, upsert=False)
-        conversation_ids.append(conversation_id)
-        i +=1
-        if i %1000 == 0:
-            logging.info("{} Tweets processed for conversation_ids".format(i))
+with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
+    convo_results =executor.map(get_conversation_id, tweets)  
+    
+convo_results = list(filter(lambda item: item is not None, convo_results))
+logging.info("Total number of conversation IDs pulled {}".format(len(convo_results)))
 
-logging.info("Total number of conversation IDs pulled {}".format(i))
+for result in convo_results:
+    if result != None:
+        collection.update_one({'_id':result[0]}, {"$set":{"conversation_id":result[1]}}, upsert=False)
+        conversation_ids.append(result[1])
 
 '''
 Get the tweets in the conversation
