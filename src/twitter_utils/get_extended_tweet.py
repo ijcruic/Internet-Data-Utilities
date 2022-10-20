@@ -6,7 +6,7 @@ import tweepy, time, os, logging, requests, base64, time, numpy as np
 from datetime import datetime
 from pymongo import MongoClient, DeleteOne
 
-logging.basicConfig(filename="russia_ukraine_war_extend_Logs.txt", filemode='a',
+logging.basicConfig(filename="USAREC_extend_Logs.txt", filemode='a',
                     level=logging.INFO)
 logger=logging.getLogger()
 
@@ -14,7 +14,7 @@ logger=logging.getLogger()
 Set up the MongoDB
 '''
 client = MongoClient('foundation1.ece.local.cmu.edu', 27777)
-db = client['russia_ukraine_war']
+db = client['USAREC']
 collection = db['twitter']
 
 
@@ -43,7 +43,29 @@ def remove_duplicates(collection):
         collection.bulk_write(requests)
     
     logging.info("Total Number of Tweets Collected {}".format(collection.estimated_document_count()))
+    
+    
+def get_extended_tweet_text(tweet_ids, collection):
+    i=0
+    for retry in range(3):
+        try:
+            for status in api.lookup_statuses(tweet_ids, tweet_mode='extended'):
+                tweet = status._json
+                if 'extended_tweet' in tweet:
+                    collection.update_one({'_id':tweet['id']}, {"$set":{"extended_tweet":tweet["extended_tweet"]}}, upsert=False)
+                elif "full_text" in tweet:
+                    collection.update_one({'_id':tweet['id']}, {"$set":{"full_text":tweet["full_text"]}}, upsert=False)
+                i +=1
+                
+        except tweepy.errors.TooManyRequests:
+            logging.exception("Exception occured: ")
+            time.sleep(15* 60)
 
+        except:
+            logging.exception("Exception occured: ")
+            time.sleep(5)
+            
+    logging.info("{} Tweets processed for extended tweets".format(i))
 
 '''
 Read in keys, set up files paths, and set up API
@@ -73,29 +95,11 @@ tweets = list(collection.find({"$and":[
 ]}))
 
 tweet_ids = [t['id'] for t in tweets]
-
-tweet_ids_chunks = [tweet_ids [x:x+100] for x in range(0, len(tweet_ids), 100)]
-i=0
-for retry in range(100):
-    try:
-        for chunk in tweet_ids_chunks:
-            for status in api.lookup_statuses(chunk, tweet_mode='extended'):
-                tweet = status._json
-                if 'extended_tweet' in tweet:
-                    collection.update_one({'_id':tweet['id']}, {"$set":{"extended_tweet":tweet["extended_tweet"]}}, upsert=False)
-                elif "full_text" in tweet:
-                    collection.update_one({'_id':tweet['id']}, {"$set":{"full_text":tweet["full_text"]}}, upsert=False)
-                i +=1
-                if i %1000 == 0:
-                    logging.info("{} Tweets processed for extended tweets".format(i))
-                    
-    except tweepy.errors.TooManyRequests:
-        logging.exception("Exception occured: ")
-        time.sleep(15* 60)
-    
-    except:
-        logging.exception("Exception occured: ")
-        time.sleep(5)
+logging.info("Total Number of Tweet IDs in data {}".format(len(tweet_ids)))
+if len(tweet_ids) > 0:
+    tweet_ids_chunks = [tweet_ids [x:x+100] for x in range(0, len(tweet_ids), 100)]
+    for chunk in tweet_ids_chunks:
+        get_extended_tweet_text(chunk, collection)4
     
     
 remove_duplicates(collection)

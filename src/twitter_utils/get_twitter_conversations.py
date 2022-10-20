@@ -7,7 +7,7 @@ import concurrent.futures
 from datetime import datetime
 from pymongo import MongoClient, DeleteOne
 
-logging.basicConfig(filename="killnet_Conversations_Logs.txt", filemode='a',
+logging.basicConfig(filename="USAREC_Conversations_Logs.txt", filemode='a',
                     level=logging.INFO)
 logger=logging.getLogger()
 
@@ -15,7 +15,7 @@ logger=logging.getLogger()
 Set up the MongoDB
 '''
 client = MongoClient('foundation1.ece.local.cmu.edu', 27777)
-db = client['killnet']
+db = client['USAREC']
 collection = db['twitter']
 
 
@@ -87,39 +87,42 @@ class ConversationScraper:
                       "max_results": 500,
                       'tweet.fields': 'id',
             }
-            try:
-                bearer_header = get_bearer_header()
-                
-                for retry in range(2):
-                    resp = requests.get(uri, headers=bearer_header, params=params)
-                    if resp.json().get('title') == 'Too Many Requests':
-                        time.sleep(60*15)
-                        logging.info("Too many requests in period of time, sleeping for 15 minutes")
+            for error_retry in range(5):
+                try:
+                    bearer_header = get_bearer_header()
+
+                    for retry in range(2):
+                        resp = requests.get(uri, headers=bearer_header, params=params)
+                        if resp.json().get('title') == 'Too Many Requests':
+                            #sleep_time = np.random.randint(3,900)
+                            #logging.info("Too many requests in period of time, sleeping for {}".format(sleep_time))
+                            time.sleep(1)
+                        else:
+                            break
+
+                    if resp.json()['meta']['result_count'] > 0:
+                        logging.info("Conversation ID {} had {} tweets in it".format(conversation_id, resp.json()['meta']['result_count']))
+                        tweet_ids = [t['id'] for  t  in resp.json()['data']]
+                        tweet_ids_chunks = [tweet_ids [x:x+100] for x in range(0, len(tweet_ids), 100)]
+                        for chunk in tweet_ids_chunks:
+                            for status in api.lookup_statuses(chunk, tweet_mode='extended'):
+                                tweet = status._json
+                                tweet['collection']= {
+                                    'collection_time' : str(datetime.now()),
+                                    'collected_by' : 'icruicks',
+                                    }
+                                tweet['conversation_id'] = conversation_id
+                                self.collection.insert_one(tweet)
+                                self.i +=1
+
+
                     else:
-                        break
-                    
-                if resp.json()['meta']['result_count'] > 0:
-                    logging.info("Conversation ID {} had {} tweets in it".format(conversation_id, resp.json()['meta']['result_count']))
-                    tweet_ids = [t['id'] for  t  in resp.json()['data']]
-                    tweet_ids_chunks = [tweet_ids [x:x+100] for x in range(0, len(tweet_ids), 100)]
-                    for chunk in tweet_ids_chunks:
-                        for status in api.lookup_statuses(chunk, tweet_mode='extended'):
-                            tweet = status._json
-                            tweet['collection']= {
-                                'collection_time' : str(datetime.now()),
-                                'collected_by' : 'icruicks',
-                                }
-                            tweet['conversation_id'] = conversation_id
-                            self.collection.insert_one(tweet)
-                            self.i +=1
-                    
-                    
-                else:
-                    logging.info(f"No conversation results for {conversation_id}")
+                        logging.info(f"No conversation results for {conversation_id}")
+                        continue
+                except:
+                    logging.exception(f"Exception occured: for {conversation_id}")
+                    time.sleep(15*60)
                     continue
-            except:
-                logging.exception(f"Exception occured: for {conversation_id}")
-                continue
                 
         logging.info(f"Total tweet id's found in conversations: {self.i}")
 
