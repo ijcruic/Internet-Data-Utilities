@@ -7,7 +7,7 @@ import concurrent.futures
 from datetime import datetime
 from pymongo import MongoClient, DeleteOne
 
-logging.basicConfig(filename="USAREC_Conversations_Logs.txt", filemode='a',
+logging.basicConfig(filename="oath_keepers_Conversations_Logs.txt", filemode='a',
                     level=logging.INFO)
 logger=logging.getLogger()
 
@@ -15,7 +15,7 @@ logger=logging.getLogger()
 Set up the MongoDB
 '''
 client = MongoClient('foundation1.ece.local.cmu.edu', 27777)
-db = client['USAREC']
+db = client['oath_keepers']
 collection = db['twitter']
 
 
@@ -114,11 +114,12 @@ class ConversationScraper:
                                 tweet['conversation_id'] = conversation_id
                                 self.collection.insert_one(tweet)
                                 self.i +=1
+                        break
 
 
                     else:
                         logging.info(f"No conversation results for {conversation_id}")
-                        continue
+                        break
                 except:
                     logging.exception(f"Exception occured: for {conversation_id}")
                     time.sleep(15*60)
