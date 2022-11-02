@@ -12,6 +12,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import WebDriverException
 from bs4 import BeautifulSoup 
+from newsplease import NewsPlease
 try:
     from unshortenit import UnshortenIt
     unshortener_available = True
@@ -256,7 +257,7 @@ class get_text_from_urls(internet_data_collection):
             self.use_selenium= True
         else:
             self.use_selenium = False
-            
+    '''        
     def retrieve_from_url(self, url):
         datum= {'url':url}
         html = None
@@ -314,6 +315,37 @@ class get_text_from_urls(internet_data_collection):
                 datum['text']= text
     
         return datum
+    '''
+    def retrieve_from_url(self, url):
+        datum= {'url':url}
+        article = None
+        logging.info("Getting text from: "+url)
+        for attempt in range(num_tries):
+            try:
+                article = NewsPlease.from_url(url, timeout=10).get_dict()
+            except:
+                logging.error("Unable to scrape: "+url)
+
+            if article == None:
+                datum['text']= "error in scraping"
+                datum['date_publish'] = None
+                datum['image_url'] = None
+                datum['language'] = None
+                datum['text'] = None
+                datum['title'] = None
+                break
+            else:
+                datum['text']= "error in scraping"
+                datum['date_publish'] = article['date_publish']
+                datum['image_url'] = article['image_url']
+                datum['language'] = article['language'] 
+                datum['text'] = article['maintext']
+                datum['title'] = article["title"]
+                break
+
+
+        return datum
+    
             
     def retreive_from_urls(self, list_of_urls):
         threads = min(MAX_THREADS, len(list_of_urls))
