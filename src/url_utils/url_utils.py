@@ -336,7 +336,7 @@ class get_text_from_urls(internet_data_collection):
                 break
             else:
                 datum['text']= "error in scraping"
-                datum['date_publish'] = article['date_publish']
+                datum['date_publish'] = article['date_publish'].strftime("%m/%d/%Y")
                 datum['image_url'] = article['image_url']
                 datum['language'] = article['language'] 
                 datum['text'] = article['maintext']
