@@ -40,7 +40,7 @@ LINK_SHORTENERS =set(['trib.al', 'bit.ly','www.bit.ly','tinyurl','ow.ly','buff.l
                            'w.wiki', 'w-j.com', 'wp.lnjmp.com', 'hann.it', 'feedproxy.google.com',
                            'tiny.iavian.com'])
 
- FALSE_LINK_SHORTENERS = set( ["t.me"
+FALSE_LINK_SHORTENERS = set( ["t.me"
                               
                               
                               ])
