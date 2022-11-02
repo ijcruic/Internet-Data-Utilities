@@ -316,6 +316,65 @@ class get_text_from_urls(internet_data_collection):
     
         return datum
     '''
+    
+    def alt_scrape_text(self, url):
+        html = None
+        logging.info("Trying alternate text scrape: "+url)
+        for attempt in range(self.num_retries):
+            try:
+                html = requests.get(url, headers={"User-Agent": "Requests"},
+                                    allow_redirects=True, timeout=10).content
+            except requests.exceptions.SSLError:
+                try:
+                    html = requests.get(url, headers={"User-Agent": "Requests"},
+                                        allow_redirects=True, timeout=10, verfiy=False).content
+                    break
+                except:
+                    break
+            except requests.exceptions.RequestException:
+                time.sleep(random.uniform(30,120))
+            else:
+                break
+            
+        if html == None:
+            logging.error("Unable to get text by requests for: "+url)
+            if self.use_selenium:
+                try:
+                    options = Options()
+                    options.add_argument('--headless')
+                    with webdriver.Chrome(self.path_to_chromedriver, options=options) as driver:
+                        driver.set_page_load_timeout(30)
+                        driver.get(url)
+                        raise WebDriverException
+                    html = driver.page_source
+                except:
+                    logging.error("Unable to get html from website: "+url)
+                    text = None
+                    return text
+            else:
+                text = None
+                return text
+    
+        try:
+            soup = BeautifulSoup(html, 'html.parser')
+            parsed_text = ''
+            for tag in soup.find_all(['p', 'text']):
+                parsed_text = parsed_text + ' ' + re.sub(r'\n\s*\n', r' ', tag.get_text().strip(), flags=re.M)
+                if len(parsed_text) > 3000000:
+                    break
+                
+        except:
+            logging.error("Unable to parse result: "+url)
+            text = None
+        else:
+            if len(text) <=500:
+                text = None
+            else:
+                text = parsed_text
+    
+        return text
+    
+    
     def retrieve_from_url(self, url):
         datum= {'url':url}
         article = None
@@ -335,7 +394,10 @@ class get_text_from_urls(internet_data_collection):
                 datum['title'] = None
                 break
             else:
-                datum['text']= "error in scraping"
+                if article["maintext"] == None:
+                    datum['text'] = self.alt_scrape_text(url)
+                else:
+                    datum['text'] = article['maintext']
                 '''
                 if article['date_publish'] is not None:
                     datum['date_publish'] = article['date_publish'].strftime("%m/%d/%Y")
@@ -344,7 +406,6 @@ class get_text_from_urls(internet_data_collection):
                 '''
                 datum['image_url'] = article['image_url']
                 datum['language'] = article['language'] 
-                datum['text'] = article['maintext']
                 datum['title'] = article["title"]
                 break
 
