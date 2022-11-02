@@ -320,7 +320,7 @@ class get_text_from_urls(internet_data_collection):
         datum= {'url':url}
         article = None
         logging.info("Getting text from: "+url)
-        for attempt in range(self.num_tries):
+        for attempt in range(self.num_retries):
             try:
                 article = NewsPlease.from_url(url, timeout=10).get_dict()
             except:
