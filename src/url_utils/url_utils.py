@@ -328,7 +328,7 @@ class get_text_from_urls(internet_data_collection):
 
             if article == None:
                 datum['text']= "error in scraping"
-                datum['date_publish'] = None
+                #datum['date_publish'] = None
                 datum['image_url'] = None
                 datum['language'] = None
                 datum['text'] = None
@@ -336,10 +336,12 @@ class get_text_from_urls(internet_data_collection):
                 break
             else:
                 datum['text']= "error in scraping"
+                '''
                 if article['date_publish'] is not None:
                     datum['date_publish'] = article['date_publish'].strftime("%m/%d/%Y")
                 else:
                     datum['date_publish'] = None
+                '''
                 datum['image_url'] = article['image_url']
                 datum['language'] = article['language'] 
                 datum['text'] = article['maintext']
