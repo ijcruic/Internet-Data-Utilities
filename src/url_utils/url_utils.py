@@ -367,7 +367,7 @@ class get_text_from_urls(internet_data_collection):
             logging.error("Unable to parse result: "+url)
             text = None
         else:
-            if len(text) <=500:
+            if len(parsed_text) <=500:
                 text = None
             else:
                 text = parsed_text
