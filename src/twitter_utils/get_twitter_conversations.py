@@ -102,7 +102,7 @@ class ConversationScraper:
 
                     if resp.json()['meta']['result_count'] > 0:
                         logging.info("Conversation ID {} had {} tweets in it".format(conversation_id, resp.json()['meta']['result_count']))
-                        tweet_ids = [t['id'] for  t  in resp.json()['data']]
+                        tweet_ids = [t['id'] for  t  in resp.json()['data']].append(int(conversation_id))
                         tweet_ids_chunks = [tweet_ids [x:x+100] for x in range(0, len(tweet_ids), 100)]
                         for chunk in tweet_ids_chunks:
                             for status in api.lookup_statuses(chunk, tweet_mode='extended'):
