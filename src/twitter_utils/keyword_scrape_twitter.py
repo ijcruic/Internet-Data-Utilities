@@ -1,53 +1,27 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu Sep  9 11:13:04 2021
+Created on Wed Apr  12 11:13:04 2023
 
 @author: icruicks
 """
-import tweepy, time, os, logging
+import twint, time, os, logging, nest_asyncio, sys
 from datetime import datetime
 from pymongo import MongoClient, DeleteOne
 
-'''
-Set up MongoDB to store collection and log file
-'''
-client = MongoClient('127.0.0.1', 2777)
-db = client['mar_a_lago_raid']
-collection = db['twitter']
-
-logging.basicConfig(filename="Mar-a-lago_Twitter_Keyword_Logs.txt", filemode='a',
-                    level=logging.INFO)
-logger=logging.getLogger() 
-
+nest_asyncio.apply()
 
 '''
-Define any helper functions
+Specify any helper functions
 '''
-def limit_handled(cursor):
-    while True:
-        try:
-            yield cursor.next()
-        except tweepy.RateLimitError:
-            print('rate limit reached...resting')
-            time.sleep(15 * 60)
-        # except TweepError:
-        #     print('rate limit reached...resting')
-        #     time.sleep(15*60) 
-        except StopIteration:
-            print('reached end of queried tweets')
-            break
-        
-        
-        
+
 def remove_duplicates(collection):
     '''
     Remove any duplicates
     '''
-    
     pipeline = [
-            {"$group": {"_id": "$id", "unique_ids": {"$addToSet": "$_id"}, "count": {"$sum": 1}}},
-            {"$match": {"count": { "$gte": 2 }}}
-            ]
+        {"$group": {"_id": "$id", "unique_ids": {"$addToSet": "$_id"}, "count": {"$sum": 1}}},
+        {"$match": {"count": { "$gte": 2 }}}
+        ]
     
     requests = []
     for document in collection.aggregate(pipeline, allowDiskUse=True):
@@ -58,68 +32,66 @@ def remove_duplicates(collection):
             
     if requests:
         collection.bulk_write(requests)
-    
-    logging.info("Total Number of Tweets Collected {}".format(collection.estimated_document_count()))
+        
+    logging.info("{} Removing duplicates. Total Number of Tweets Collected {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S") , collection.estimated_document_count()))
 
 
 '''
-Read in keys, set up files paths, and set up API
+Specify data base to get conversations from
 '''
-# key_dir = os.path.join("C:", os.sep, "Users", "icruicks", "Documents", "Keys")
-key_dir = "Keys"
-
-with open(os.path.join(key_dir, "afg_twitter_consumer_key.txt"),'r') as f:
-    consumer_key = f.read()
-    
-with open(os.path.join(key_dir, "afg_twitter_consumer_secret.txt"),'r') as f:
-    consumer_secret= f.read()
-    
-with open(os.path.join(key_dir, "afg_twitter_access_key.txt"),'r') as f:
-    access_token_key = f.read()
-    
-with open(os.path.join(key_dir, "afg_twitter_access_secret.txt"),'r') as f:
-    access_token_secret= f.read()
-
-auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
-auth.set_access_token(access_token_key, access_token_secret)
-api = tweepy.API(auth, wait_on_rate_limit=True)
-
+db_name = sys.argv[1]
+host = sys.argv[2]
+search_keywords = sys.argv[3]
+#db_name = 'killnet'
+#host = 'foundation1.ece.local.cmu.edu'
+repeats = 10
 
 '''
-Read in keywords and hashtags for the query terms, and any other arguments
+Set envrionment
 '''
-kwargs = {
-"q" : ''' "mar-a-lago" OR "FBI Raid" OR "Garland" ''',
-"tweet_mode" : 'extended'
-}
+client = MongoClient(host, 27777)
+db = client[db_name]
+collection = db["twitter"]
+
+
+logging.basicConfig(filename=str(db_name)+"_Twitter_Scrape_Logs.txt", filemode='a',
+                    level=logging.INFO)
+logger=logging.getLogger() 
 
 '''
-Collect and store the Twitter data
+Collect and Store Tweets
 '''
-remove_duplicates(collection)
 
-i = 0
-for retry in range(20):
-    try:
-        for tweet in tweepy.Cursor(api.search_tweets, **kwargs).items():
+print("{} Total Number of Starting Tweet, Before Collection: {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S") , collection.estimated_document_count()))
+for i in range(repeats):
+    if i > 1:
+        logging.info("{} Total Number of Tweets Collected {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S") , collection.estimated_document_count()))
+        time.sleep(21600)
+    try: 
+        # Collect the Tweets via Twint
+        c = twint.Config()
+        c.Store_object = True
+        c.Search = search_keywords
+
+        twint.run.Search(c)
+        tweets = twint.output.tweets_list
+        logging.info("{} Total Number of Tweets Collected {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S") , len(tweets)))
+
+        # Store the collected tweets in a Mongo DB
+        for tweet in tweets:
             dt_now =  datetime.now()
-            tweet = tweet._json
+            tweet = vars(tweet)
+            tweet['text'] = tweet.pop('tweet')
             tweet['collection']= {
                 'collection_time' : str(dt_now),
                 'collected_by' : 'icruicks',
-                'collected_query' : kwargs["q"]
+                'collected_query' : search_keywords
                 }
             collection.insert_one(tweet)
-            i +=1
-            if i %1000 == 0:
-                logging.info("{} Tweets processed".format(i))
-    
+        remove_duplicates(collection)
     except:
         logging.exception("Exception occured:")
-        time.sleep(15 * 60)
-        remove_duplicates(collection)
 
 remove_duplicates(collection)
-
 logging.info("/////////////////Final Collection Number////////////")
-logging.info("Total Number of Tweets Collected {}".format(collection.estimated_document_count()))
+logging.info("{} Total Number of Tweets in Database {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S") , collection.estimated_document_count()))

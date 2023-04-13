@@ -7,7 +7,7 @@ import concurrent.futures
 from datetime import datetime
 from pymongo import MongoClient, DeleteOne
 
-logging.basicConfig(filename="oath_keepers_Conversations_Logs.txt", filemode='a',
+logging.basicConfig(filename="USAREC_Conversations_Logs.txt", filemode='a',
                     level=logging.INFO)
 logger=logging.getLogger()
 
@@ -15,7 +15,7 @@ logger=logging.getLogger()
 Set up the MongoDB
 '''
 client = MongoClient('foundation1.ece.local.cmu.edu', 27777)
-db = client['oath_keepers']
+db = client['USAREC']
 collection = db['twitter']
 
 
@@ -60,12 +60,16 @@ def get_conversation_id(tweet):
             bearer_header = get_bearer_header()
             resp = requests.get(uri, headers=bearer_header, params=params)
             conversation_id = resp.json()['data'][0]['conversation_id']
-            return (tweet['_id'], conversation_id)
+            collection.update_one({'_id':tweet['_id']}, {"$set":{"conversation_id":conversation_id}}, upsert=False)
+            logging.info("Retrieved conversation ID for Tweet: {}".format(tweet['id']))
+            break
+            # return (tweet['_id'], conversation_id)
         except tweepy.errors.TooManyRequests:
             logging.exception("Exception occured: ")
-            time.sleep(15* 60)
+            time.sleep(1)
         except:
-            return None
+            break
+            #return None
     
     
 class ConversationScraper:
@@ -102,7 +106,8 @@ class ConversationScraper:
 
                     if resp.json()['meta']['result_count'] > 0:
                         logging.info("Conversation ID {} had {} tweets in it".format(conversation_id, resp.json()['meta']['result_count']))
-                        tweet_ids = [t['id'] for  t  in resp.json()['data']].append(int(conversation_id))
+                        tweet_ids = [t['id'] for  t  in resp.json()['data']]
+                        tweet_ids.append(conversation_id)
                         tweet_ids_chunks = [tweet_ids [x:x+100] for x in range(0, len(tweet_ids), 100)]
                         for chunk in tweet_ids_chunks:
                             for status in api.lookup_statuses(chunk, tweet_mode='extended'):
@@ -178,17 +183,17 @@ api = tweepy.API(auth, wait_on_rate_limit=True)
 Get base data and add conversation_ids, if they exist, and then get the full tweets of 
 any other tweets in the conversation
 '''
-
+'''
 # Add in any previously collected conversation ID's (optional step)
 conversation_ids = list(collection.find({'conversation_id':{'$exists':True}},{"conversation_id":1}))
 conversation_ids = [c['conversation_id'] for c in conversation_ids]
-
+'''
 # conversation_ids =[]
 
 tweets = list(collection.find({'conversation_id':{'$exists':False}},{"id":1}))
 with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
     convo_results =executor.map(get_conversation_id, tweets)  
-    
+'''    
 convo_results = list(filter(lambda item: item is not None, convo_results))
 logging.info("Total number of conversation IDs pulled {}".format(len(convo_results)))
 
@@ -196,11 +201,16 @@ for result in convo_results:
     if result != None:
         collection.update_one({'_id':result[0]}, {"$set":{"conversation_id":result[1]}}, upsert=False)
         conversation_ids.append(result[1])
+'''
+
+conversation_ids = list(collection.find({'conversation_id':{'$exists':True}},{"conversation_id":1}))
+conversation_ids = [c['conversation_id'] for c in conversation_ids]
 
 '''
 Get the tweets in the conversation
 '''
 conversation_ids = list(set(conversation_ids)) #make sure to not duplicate any conversation_ids
+logging.info("Total number of unique conversation IDs in data {}".format(len(conversation_ids)))
 convo_scraper = ConversationScraper(api, collection)
 convo_scraper.get_conversations(conversation_ids)
                       
