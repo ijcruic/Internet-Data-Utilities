@@ -52,7 +52,7 @@ class get_youtube_data_from_urls:
                     except OSError:
                         pass
                 
-        # Set the API key for PAfy
+        # Set the API key for Pafy
         if api_key != None:
             pafy.set_api_key(api_key)
                 

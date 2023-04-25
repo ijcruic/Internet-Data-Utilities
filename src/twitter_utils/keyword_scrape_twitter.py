@@ -33,7 +33,7 @@ def remove_duplicates(collection):
     if requests:
         collection.bulk_write(requests)
         
-    logging.info("{} Removing duplicates. Total Number of Tweets Collected {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S") , collection.estimated_document_count()))
+    logging.info("{} Removing duplicates. Total Number of Tweets in Database {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S") , collection.estimated_document_count()))
 
 
 '''
@@ -62,35 +62,38 @@ logger=logging.getLogger()
 Collect and Store Tweets
 '''
 
-print("{} Total Number of Starting Tweet, Before Collection: {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S") , collection.estimated_document_count()))
+logging.info("{} Total Number of Starting Tweet, Before Collection: {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S") , collection.estimated_document_count()))
 for i in range(repeats):
-    if i > 1:
-        logging.info("{} Total Number of Tweets Collected {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S") , collection.estimated_document_count()))
-        time.sleep(21600)
-    try: 
-        # Collect the Tweets via Twint
-        c = twint.Config()
-        c.Store_object = True
-        c.Search = search_keywords
+    if i >= 1:
+        logging.info("{} Total Number of in Database {}, pausing collection".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S") , collection.estimated_document_count()))
+        time.sleep(3600)
 
-        twint.run.Search(c)
-        tweets = twint.output.tweets_list
-        logging.info("{} Total Number of Tweets Collected {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S") , len(tweets)))
+    # Collect the Tweets via Twint
+    c = twint.Config()
+    c.Store_object = True
+    c.Search = search_keywords
 
-        # Store the collected tweets in a Mongo DB
-        for tweet in tweets:
+    twint.run.Search(c)
+    tweets = twint.output.tweets_list
+    logging.info("{} Total Number of Tweets Collected {}".format(datetime.now().strftime("%Y-%m-%d %H:%M:%S") , len(tweets)))
+
+    # Store the collected tweets in a Mongo DB
+    for raw_tweet in tweets:
+        try:
             dt_now =  datetime.now()
-            tweet = vars(tweet)
-            tweet['text'] = tweet.pop('tweet')
+            tweet = vars(raw_tweet)
+            if 'tweet' in tweet.keys():
+                tweet['text'] = tweet.pop('tweet')
             tweet['collection']= {
                 'collection_time' : str(dt_now),
                 'collected_by' : 'icruicks',
                 'collected_query' : search_keywords
                 }
             collection.insert_one(tweet)
-        remove_duplicates(collection)
-    except:
-        logging.exception("Exception occured:")
+        except:
+            logging.exception("Exception occured: {}".format(tweet))
+
+    remove_duplicates(collection)
 
 remove_duplicates(collection)
 logging.info("/////////////////Final Collection Number////////////")
