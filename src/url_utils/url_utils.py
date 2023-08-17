@@ -248,7 +248,7 @@ class process_urls(internet_data_collection):
         return pd.DataFrame(collection_results)
     
     
-class get_text_from_urls(internet_data_collection):
+class get_data_from_urls(internet_data_collection):
     
     def __init__(self, num_retries=3, path_to_chromedriver=None):
         self.num_retries = num_retries
@@ -317,9 +317,20 @@ class get_text_from_urls(internet_data_collection):
         return datum
     '''
     
-    def alt_scrape_text(self, url):
+    def retrieve_from_url(self, url):
+        datum = self.retrieve_from_url_newsplease(url)
+        
+        if datum['text'] == "error in scraping":
+            datum = self.retrieve_from_url_requests(url)
+        
+        return datum
+    
+    def retrieve_from_url_requests(self, url):
+        datum= {'url':url,'image_url':None,
+                'language':None, 'text':None,'title':None
+               }
         html = None
-        logging.info("Trying alternate text scrape: "+url)
+        logging.info("Trying requests text scrape: "+url)
         for attempt in range(self.num_retries):
             try:
                 html = requests.get(url, headers={"User-Agent": "Requests"},
@@ -349,11 +360,11 @@ class get_text_from_urls(internet_data_collection):
                     html = driver.page_source
                 except:
                     logging.error("Unable to get html from website: "+url)
-                    text = None
-                    return text
+                    datum['text'] = None
+                    return datum
             else:
-                text = None
-                return text
+                datum['text'] = None
+                return datum
     
         try:
             soup = BeautifulSoup(html, 'html.parser')
@@ -365,17 +376,17 @@ class get_text_from_urls(internet_data_collection):
                 
         except:
             logging.error("Unable to parse result: "+url)
-            text = None
+            datum['text'] = None
         else:
             if len(parsed_text) <=500:
-                text = None
+                datum['text'] = None
             else:
                 text = parsed_text
     
-        return text
+        return datum
     
     
-    def retrieve_from_url(self, url):
+    def retrieve_from_url_newsplease(self, url):
         datum= {'url':url}
         article = None
         logging.info("Getting text from: "+url)
@@ -408,8 +419,6 @@ class get_text_from_urls(internet_data_collection):
                 datum['language'] = article['language'] 
                 datum['title'] = article["title"]
                 break
-
-
         return datum
     
             
