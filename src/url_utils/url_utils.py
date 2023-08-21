@@ -13,6 +13,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import WebDriverException
 from bs4 import BeautifulSoup 
 from newsplease import NewsPlease
+from newspaper import Article
 try:
     from unshortenit import UnshortenIt
     unshortener_available = True
@@ -318,10 +319,12 @@ class get_data_from_urls(internet_data_collection):
     '''
     
     def retrieve_from_url(self, url):
-        datum = self.retrieve_from_url_newsplease(url)
+        datum = self.retrieve_from_url_newspaper3k(url)
         
         if datum['text'] == "error in scraping":
-            datum = self.retrieve_from_url_requests(url)
+            datum = self.retrieve_from_url_newsplease(url)
+            if datum['text'] == "error in scraping":
+                datum = self.retrieve_from_url_requests(url)
         
         return datum
     
@@ -389,7 +392,7 @@ class get_data_from_urls(internet_data_collection):
     def retrieve_from_url_newsplease(self, url):
         datum= {'url':url}
         article = None
-        logging.info("Getting text from: "+url)
+        logging.info("Getting text from (NewsPlease): "+url)
         for attempt in range(self.num_retries):
             try:
                 article = NewsPlease.from_url(url, timeout=10).get_dict()
@@ -406,7 +409,7 @@ class get_data_from_urls(internet_data_collection):
                 break
             else:
                 if article["maintext"] == None:
-                    datum['text'] = self.alt_scrape_text(url)
+                    datum['text'] = "error in scraping"
                 else:
                     datum['text'] = article['maintext']
                 '''
@@ -418,6 +421,37 @@ class get_data_from_urls(internet_data_collection):
                 datum['image_url'] = article['image_url']
                 datum['language'] = article['language'] 
                 datum['title'] = article["title"]
+                break
+        return datum
+    
+    
+    def retrieve_from_url_newspaper3k(self, url):
+        datum= {'url':url}
+        article = None
+        logging.info("Getting text from (newspaper3k): "+url)
+        for attempt in range(self.num_retries):
+            try:
+                article = Article(url=url)
+                article.download()
+                article.parse()
+            except:
+                logging.error("Unable to scrape: "+url)
+
+            if article == None:
+                datum['text']= "error in scraping"
+                datum['date_publish'] = None
+                datum['image_url'] = None
+                datum['language'] = None
+                datum['text'] = None
+                datum['authors'] = None
+                datum['title'] = None
+                break
+            else:
+                datum['text'] = article.text
+                datum['date_publish'] = article.publish_date.strftime("%m/%d/%Y")
+                datum['image_url'] = article.top_image
+                datum['authors'] = article.authors
+                datum['title'] = article.title
                 break
         return datum
     
